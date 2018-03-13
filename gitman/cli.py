@@ -64,6 +64,8 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
                      help="list of dependencies names to install")
     sub.add_argument('-e', '--fetch', action='store_true',
                      help="always fetch the latest branches")
+    sub.add_argument('-F', '--flat', action='store_true', dest='flat',
+                     help="resolve dependencies as a flat hierarchy")
 
     # Update parser
     info = "update dependencies to the latest versions"
@@ -77,6 +79,8 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
     sub.add_argument('-L', '--skip-lock',
                      action='store_false', dest='lock', default=None,
                      help="disable recording of updated versions")
+ 	sub.add_argument('-F', '--flat', action='store_true', dest='flat',
+                     help="resolve dependencies as a flat hierarchy")
 
     # List parser
     info = "display the current version of each dependency"
@@ -148,7 +152,8 @@ def _get_command(function, namespace):  # pylint: disable=too-many-statements
                       depth=namespace.depth,
                       force=namespace.force,
                       clean=namespace.clean,
-                      skip_changes=namespace.skip_changes)
+                      skip_changes=namespace.skip_changes,
+                      flat=namespace.flat)
         if namespace.command == 'install':
             kwargs.update(fetch=namespace.fetch)
         if namespace.command == 'update':
