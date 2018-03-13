@@ -3,6 +3,7 @@ import os
 
 import yorm
 from yorm.types import SortedList, String
+import inspect
 
 from . import Source
 from .. import common, shell
@@ -53,6 +54,8 @@ class Config(yorm.ModelMixin):
 
     @location_path.setter
     def location_path(self, value):
+        if inspect.stack()[1][0].f_locals["self"].__class__ != self.__class__:
+            raise AttributeError('Property can only be set from a config object!')
         if isinstance(value, str) or isinstance(value, unicode):
             self._location_path = value
         else:
