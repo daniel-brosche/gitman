@@ -51,6 +51,13 @@ class Config(yorm.ModelMixin):
         """Get the full path to the dependency storage location."""
         return os.path.normpath(os.path.join(self.root, self.location))
 
+    @location_path.setter
+    def location_path(self, value):
+        if isinstance(value, str) or isinstance(value, unicode):
+            self._location_path = value
+        else:
+            raise AttributeError('location_path must be a string!')
+
     def get_path(self, name=None):
         """Get the full path to a dependency or internal file."""
         base = self.location_path
