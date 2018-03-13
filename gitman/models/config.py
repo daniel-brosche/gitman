@@ -49,7 +49,7 @@ class Config(yorm.ModelMixin):
     @property
     def location_path(self):
         """Get the full path to the dependency storage location."""
-        return os.path.normpath(os.path.join(self.root, self.location))
+        return os.path.normpath(os.path.join(self.root, self.location)) if not hasattr(self, "_location_path") else self._location_path
 
     @location_path.setter
     def location_path(self, value):
@@ -72,7 +72,8 @@ class Config(yorm.ModelMixin):
     def install_dependencies(self, *names, depth=None,
                              update=True, recurse=False,
                              force=False, fetch=False, clean=True,
-                             skip_changes=False):
+                             skip_changes=False,
+                             flat=False):
         """Download or update the specified dependencies."""
         if depth == 0:
             log.info("Skipped directory: %s", self.location_path)
@@ -104,6 +105,8 @@ class Config(yorm.ModelMixin):
             config = load_config(search=False)
             if config:
                 common.indent()
+                if flat:
+                    config.location_path = self.location_path
                 count += config.install_dependencies(
                     depth=None if depth is None else max(0, depth - 1),
                     update=update and recurse,
@@ -111,7 +114,8 @@ class Config(yorm.ModelMixin):
                     force=force,
                     fetch=fetch,
                     clean=clean,
-                    skip_changes=skip_changes
+                    skip_changes=skip_changes,
+                    flat=flat
                 )
                 common.dedent()
 
@@ -124,7 +128,7 @@ class Config(yorm.ModelMixin):
 
         return count
 
-    def run_scripts(self, *names, depth=None, force=False):
+    def run_scripts(self, *names, depth=None, force=False, flat=False):
         """Run scripts for the specified dependencies."""
         if depth == 0:
             log.info("Skipped directory: %s", self.location_path)
@@ -146,6 +150,8 @@ class Config(yorm.ModelMixin):
                 config = load_config(search=False)
                 if config:
                     common.indent()
+                    if flat:
+                        config.location_path = self.location_path
                     count += config.run_scripts(
                         depth=None if depth is None else max(0, depth - 1),
                         force=force,
