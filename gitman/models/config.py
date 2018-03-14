@@ -6,7 +6,7 @@ from yorm.types import SortedList, String, Boolean
 import inspect
 
 from . import Source
-from .. import common, shell
+from .. import common, shell, exceptions
 
 
 
@@ -92,6 +92,17 @@ class Config(yorm.ModelMixin):
         sources = self._get_sources(use_locked=False if update else None)
         sources_filter = list(names) if names else [s.name for s in sources]
 
+        if self.flat:
+            if not hasattr(self, 'all_parent_sources'):
+                self.all_parent_sources = sources
+            else:
+                for source in sources:
+                    for entry in self.all_parent_sources:
+                        if source.name != entry.name and source.repo != entry.repo:
+                            self.all_parent_sources.append(source)
+                        elif source.name == entry.name and (source.repo != entry.repo or source.rev != entry.rev):
+                            raise exceptions.InvalidConfig("Cannot resolve flat hierarchy from sources of same name and different repo/rev!")
+
         if not os.path.isdir(self.location_path):
             shell.mkdir(self.location_path)
         shell.cd(self.location_path)
@@ -115,9 +126,11 @@ class Config(yorm.ModelMixin):
             config = load_config(search=False)
             if config:
                 common.indent()
+                # Top level preference for flat hierarchy should always propagate
+                config.flat = self.flat
+                config.all_parent_sources = self.all_parent_sources
                 if self.flat:
                     config.location_path = self.location_path
-                    config.flat = self.flat
                 count += config.install_dependencies(
                     depth=None if depth is None else max(0, depth - 1),
                     update=update and recurse,
@@ -161,9 +174,10 @@ class Config(yorm.ModelMixin):
                 config = load_config(search=False)
                 if config:
                     common.indent()
+                    # Top level preference for flat hierarchy should always propagate
+                    config.flat = self.flat
                     if self.flat:
                         config.location_path = self.location_path
-                        config.flat = self.flat
                     count += config.run_scripts(
                         depth=None if depth is None else max(0, depth - 1),
                         force=force,
