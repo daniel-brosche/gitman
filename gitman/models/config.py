@@ -2,17 +2,19 @@ import logging
 import os
 
 import yorm
-from yorm.types import SortedList, String
+from yorm.types import SortedList, String, Boolean
 import inspect
 
 from . import Source
 from .. import common, shell
 
 
+
 log = logging.getLogger(__name__)
 
 
 @yorm.attr(location=String)
+@yorm.attr(flat=Boolean)
 @yorm.attr(sources=SortedList.of_type(Source))
 @yorm.attr(sources_locked=SortedList.of_type(Source))
 @yorm.sync("{self.root}/{self.filename}", auto_save=False)
@@ -22,13 +24,14 @@ class Config(yorm.ModelMixin):
     LOG = "gitman.log"
 
     def __init__(self, root=None,
-                 filename="gitman.yml", location="gitman_sources"):
+                 filename="gitman.yml", location="gitman_sources", flat=False):
         super().__init__()
         self.root = root or os.getcwd()
         self.filename = filename
         self.location = location
         self.sources = []
         self.sources_locked = []
+        self.flat = flat
 
     def _on_post_load(self):
         for source in self.sources:
@@ -82,6 +85,10 @@ class Config(yorm.ModelMixin):
             log.info("Skipped directory: %s", self.location_path)
             return 0
 
+        # The user has chosen flat hierarchy resolution using command line argument --flat
+        if flat:
+            self.flat = flat
+
         sources = self._get_sources(use_locked=False if update else None)
         sources_filter = list(names) if names else [s.name for s in sources]
 
@@ -108,8 +115,9 @@ class Config(yorm.ModelMixin):
             config = load_config(search=False)
             if config:
                 common.indent()
-                if flat:
+                if self.flat:
                     config.location_path = self.location_path
+                    config.flat = self.flat
                 count += config.install_dependencies(
                     depth=None if depth is None else max(0, depth - 1),
                     update=update and recurse,
@@ -118,7 +126,7 @@ class Config(yorm.ModelMixin):
                     fetch=fetch,
                     clean=clean,
                     skip_changes=skip_changes,
-                    flat=flat
+                    flat=self.flat
                 )
                 common.dedent()
 
@@ -153,8 +161,9 @@ class Config(yorm.ModelMixin):
                 config = load_config(search=False)
                 if config:
                     common.indent()
-                    if flat:
+                    if self.flat:
                         config.location_path = self.location_path
+                        config.flat = self.flat
                     count += config.run_scripts(
                         depth=None if depth is None else max(0, depth - 1),
                         force=force,
