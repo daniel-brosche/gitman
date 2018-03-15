@@ -128,9 +128,9 @@ class Config(yorm.ModelMixin):
                 common.indent()
                 # Top level preference for flat hierarchy should always propagate
                 config.flat = self.flat
-                config.all_parent_sources = self.all_parent_sources
                 if self.flat:
                     config.location_path = self.location_path
+                    config.all_parent_sources = self.all_parent_sources
                 count += config.install_dependencies(
                     depth=None if depth is None else max(0, depth - 1),
                     update=update and recurse,
