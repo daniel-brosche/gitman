@@ -53,13 +53,15 @@ class Config(yorm.ModelMixin):
     @property
     def location_path(self):
         """Get the full path to the dependency storage location."""
-        return os.path.normpath(os.path.join(self.root, self.location)) if not hasattr(self, "_location_path") else self._location_path
+        if hasattr(self, "_location_path"):
+            return self._location_path
+        return os.path.normpath(os.path.join(self.root, self.location))
 
     @location_path.setter
     def location_path(self, value):
         if inspect.stack()[1][0].f_locals["self"].__class__ != self.__class__:
             raise AttributeError('Property can only be set from a config object!')
-        if isinstance(value, str) or isinstance(value, unicode):
+        if isinstance(value, str) or isinstance(value, unicode):  # noqa: F401
             self._location_path = value
         else:
             raise AttributeError('location_path must be a string!')
@@ -101,7 +103,7 @@ class Config(yorm.ModelMixin):
                         if source.name != entry.name and source.repo != entry.repo:
                             self.all_parent_sources.append(source)
                         elif source.name == entry.name and (source.repo != entry.repo or source.rev != entry.rev):
-                            raise exceptions.InvalidConfig("Cannot resolve flat hierarchy from sources of same name and different repo/rev!")
+                            raise exceptions.InvalidConfig("Repo/rev conflict encountered in flat hierarchy while updating {}".format(self.root))
 
         if not os.path.isdir(self.location_path):
             shell.mkdir(self.location_path)
