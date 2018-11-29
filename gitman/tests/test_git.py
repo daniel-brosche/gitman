@@ -1,4 +1,5 @@
 # pylint: disable=no-self-use
+# pylint: disable=too-many-public-methods
 
 import os
 from unittest.mock import Mock, patch
