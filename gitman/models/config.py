@@ -14,9 +14,9 @@ log = logging.getLogger(__name__)
 
 
 @yorm.attr(location=String)
-@yorm.attr(flat=Boolean)
 @yorm.attr(sources=SortedList.of_type(Source))
 @yorm.attr(sources_locked=SortedList.of_type(Source))
+@yorm.attr(flat=Boolean)
 @yorm.sync("{self.root}/{self.filename}", auto_save=False)
 class Config(yorm.ModelMixin):
     """Specifies all dependencies for a project."""
@@ -32,8 +32,13 @@ class Config(yorm.ModelMixin):
         self.sources = []
         self.sources_locked = []
         self.flat = flat
+        self.processed_sources = []
+        self.location_path = os.path.normpath(os.path.join(self.root, self.location))
 
     def _on_post_load(self):
+        # update location path because default location may different then loaded value
+        self.location_path = os.path.normpath(os.path.join(self.root, self.location))
+
         for source in self.sources:
             source._on_post_load()  # pylint: disable=protected-access
         for source in self.sources_locked:
@@ -49,22 +54,6 @@ class Config(yorm.ModelMixin):
     def log_path(self):
         """Get the full path to the log file."""
         return os.path.normpath(os.path.join(self.location_path, self.LOG))
-
-    @property
-    def location_path(self):
-        """Get the full path to the dependency storage location."""
-        if hasattr(self, "_location_path"):
-            return self._location_path
-        return os.path.normpath(os.path.join(self.root, self.location))
-
-    @location_path.setter
-    def location_path(self, value):
-        if inspect.stack()[1][0].f_locals["self"].__class__ != self.__class__:
-            raise AttributeError('Property can only be set from a config object!')
-        if isinstance(value, str) or isinstance(value, unicode):  # noqa: F401
-            self._location_path = value
-        else:
-            raise AttributeError('location_path must be a string!')
 
     def get_path(self, name=None):
         """Get the full path to a dependency or internal file."""
@@ -95,20 +84,45 @@ class Config(yorm.ModelMixin):
         sources_filter = list(names) if names else [s.name for s in sources]
 
         if self.flat:
-            if not hasattr(self, 'all_parent_sources'):
-                self.all_parent_sources = sources
-            else:
-                for source in sources:
-                    for entry in self.all_parent_sources:
-                        if source.name != entry.name and source.repo != entry.repo:
-                            self.all_parent_sources.append(source)
-                        elif source.name == entry.name and (source.repo != entry.repo or source.rev != entry.rev):
-                            raise exceptions.InvalidConfig("Repo/rev conflict encountered in flat hierarchy while updating {}".format(self.root))
-
+            # gather flat sources and check for rev conflicts
+            for source in sources:
+                is_srcname_found = False
+                for processed_source in self.processed_sources:
+                    if source.name == processed_source.name: # check if current source was already processed
+                        is_srcname_found = True
+                        if (source.rev != processed_source.rev or 
+                            source.repo != processed_source.repo):
+                            error_msg = ("Repo/rev conflict encountered in"
+                                         "flat hierarchy while updating {}\n"
+                                         "Details: {} conflict with {}"
+                                         ).format(self.root, 
+                                                  str(processed_source), 
+                                                  str(source))
+                            raise exceptions.InvalidConfig(error_msg)               
+                        # new source name detected -> store new source name to list (cache) used to check for rev conflicts 
+                if not is_srcname_found: # source.name != processed_source.name and source.repo != processed_source.repo:
+                    self.processed_sources.append(source)
+        else:
+            for source in sources:
+                for processed_source in self.processed_sources:
+                    if source.name == processed_source.name: # check if current source was already processed
+                        error_msg = ("Repo/rev conflict encountered in"
+                                    "flat hierarchy while updating {}\n"
+                                    "Details: {} conflict with {}"
+                                    ).format(self.root, 
+                                            str(processed_source), 
+                                            str(source))
+                        raise exceptions.InvalidConfig(error_msg)               
+                
+                self.processed_sources.append(source)
+        
         if not os.path.isdir(self.location_path):
             shell.mkdir(self.location_path)
+        
         shell.cd(self.location_path)
+        
         common.newline()
+        
         common.indent()
 
         count = 0
@@ -128,11 +142,17 @@ class Config(yorm.ModelMixin):
             config = load_config(search=False)
             if config:
                 common.indent()
-                # Top level preference for flat hierarchy should always propagate
-                config.flat = self.flat
+                
                 if self.flat:
-                    config.location_path = self.location_path
-                    config.all_parent_sources = self.all_parent_sources
+                    # Top level preference for flat hierarchy should 
+                    # always propagate flat flag if set once
+                    config.flat = self.flat
+                    # override default location -> always use root location
+                    # to install dependencies all into the same folder
+                    config.location_path = self.location_path 
+                    # forward processed sources list to check for global conflicts
+                    config.processed_sources = self.processed_sources
+                
                 count += config.install_dependencies(
                     depth=None if depth is None else max(0, depth - 1),
                     update=update and recurse,
@@ -176,10 +196,11 @@ class Config(yorm.ModelMixin):
                 config = load_config(search=False)
                 if config:
                     common.indent()
-                    # Top level preference for flat hierarchy should always propagate
-                    config.flat = self.flat
                     if self.flat:
+                        # Top level preference for flat hierarchy should always propagate
+                        config.flat = self.flat
                         config.location_path = self.location_path
+                    
                     count += config.run_scripts(
                         depth=None if depth is None else max(0, depth - 1),
                         force=force,

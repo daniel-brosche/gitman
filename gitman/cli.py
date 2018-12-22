@@ -43,6 +43,10 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
                                help=("skip dependencies with "
                                      "uncommitted changes"))
 
+    options.add_argument('-F', '--flat', action='store_true', 
+                         dest='flat',
+                         help="resolve dependencies as a flat hierarchy")
+
     shared = {'formatter_class': common.WideHelpFormatter}
 
     # Main parser
@@ -64,8 +68,7 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
                      help="list of dependencies names to install")
     sub.add_argument('-e', '--fetch', action='store_true',
                      help="always fetch the latest branches")
-    sub.add_argument('-F', '--flat', action='store_true', dest='flat',
-                     help="resolve dependencies as a flat hierarchy")
+    
 
     # Update parser
     info = "update dependencies to the latest versions"
@@ -79,8 +82,7 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
     sub.add_argument('-L', '--skip-lock',
                      action='store_false', dest='lock', default=None,
                      help="disable recording of updated versions")
- 	sub.add_argument('-F', '--flat', action='store_true', dest='flat',
-                     help="resolve dependencies as a flat hierarchy")
+ 	
 
     # List parser
     info = "display the current version of each dependency"
@@ -208,6 +210,9 @@ def _run_command(function, args, kwargs):
     except exceptions.ScriptFailure as exception:
         _show_error(exception)
         exit_message = "Run again with '--force' to ignore script errors"
+    except exceptions.InvalidConfig as exception:
+        _show_error(exception)
+        exit_message = "Check the gitman config of the already imported repositories and the repository that raises the conflict error"
     finally:
         if exit_message:
             common.show(exit_message, color='message')
