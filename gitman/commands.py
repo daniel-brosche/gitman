@@ -94,8 +94,7 @@ def install(*names, root=None, depth=None,
 @restore_cwd
 def update(*names, root=None, depth=None,
            recurse=False, force=False, clean=True, lock=None,  # pylint: disable=redefined-outer-name
-           skip_changes=False,
-           flat=False):
+           skip_changes=False):
     """Update dependencies for a project.
 
     Optional arguments:
@@ -110,7 +109,6 @@ def update(*names, root=None, depth=None,
     - `lock`: indicates updated dependency versions should be recorded
     - `skip_changes`: indicates dependencies with uncommitted changes
      should be skipped
-	- `flat`: resolve dependencies as a flat hierarchy
     """
     log.info("%s dependencies%s: %s",
              'Force updating' if force else 'Updating',
@@ -127,7 +125,7 @@ def update(*names, root=None, depth=None,
         count = config.install_dependencies(
             *names, update=True, depth=depth,
             recurse=recurse, force=force, fetch=True, clean=clean,
-            skip_changes=skip_changes, flat=flat
+            skip_changes=skip_changes
         )
 
         if count and lock is not False:
@@ -138,12 +136,12 @@ def update(*names, root=None, depth=None,
                                      skip_changes=skip_changes)
 
         if count:
-            _run_scripts(*names, depth=depth, force=force, _config=config, flat=flat)
+            _run_scripts(*names, depth=depth, force=force, _config=config)
 
     return _display_result("update", "Updated", count)
 
 
-def _run_scripts(*names, depth=None, force=False, _config=None, flat=False):
+def _run_scripts(*names, depth=None, force=False, _config=None):
     """Run post-install scripts.
 
     Optional arguments:
@@ -157,7 +155,7 @@ def _run_scripts(*names, depth=None, force=False, _config=None, flat=False):
 
     common.show("Running scripts...", color='message', log=False)
     common.newline()
-    _config.run_scripts(*names, depth=depth, force=force, flat=flat)
+    _config.run_scripts(*names, depth=depth, force=force)
 
 
 @restore_cwd

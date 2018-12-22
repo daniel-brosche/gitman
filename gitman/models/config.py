@@ -14,30 +14,40 @@ log = logging.getLogger(__name__)
 
 
 @yorm.attr(location=String)
+@yorm.attr(resolver=String)
 @yorm.attr(sources=SortedList.of_type(Source))
 @yorm.attr(sources_locked=SortedList.of_type(Source))
-@yorm.attr(flat=Boolean)
 @yorm.sync("{self.root}/{self.filename}", auto_save=False)
 class Config(yorm.ModelMixin):
     """Specifies all dependencies for a project."""
 
     LOG = "gitman.log"
+    RESOLVER_RECURSIVE = "recursive"
+    RESOLVER_FLAT_RECURSIVE = "flat-recursive"
+    RESOLVER_FLAT = "flat"
 
     def __init__(self, root=None,
-                 filename="gitman.yml", location="gitman_sources", flat=False):
+                 filename="gitman.yml", location="gitman_sources", resolver=RESOLVER_RECURSIVE):
         super().__init__()
         self.root = root or os.getcwd()
         self.filename = filename
         self.location = location
+        self.resolver = resolver
         self.sources = []
         self.sources_locked = []
-        self.flat = flat
         self.processed_sources = []
         self.location_path = os.path.normpath(os.path.join(self.root, self.location))
 
     def _on_post_load(self):
         # update location path because default location may different then loaded value
         self.location_path = os.path.normpath(os.path.join(self.root, self.location))
+
+        # check if any of the valid resolver values is set 
+        # if not then set RESOLVER_RECURSIVE as default
+        if (self.resolver != Config.RESOLVER_RECURSIVE and
+                self.resolver != Config.RESOLVER_FLAT_RECURSIVE and
+                self.resolver != Config.RESOLVER_FLAT):
+            self.resolver = Config.RESOLVER_RECURSIVE
 
         for source in self.sources:
             source._on_post_load()  # pylint: disable=protected-access
@@ -69,21 +79,16 @@ class Config(yorm.ModelMixin):
     def install_dependencies(self, *names, depth=None,
                              update=True, recurse=False,
                              force=False, fetch=False, clean=True,
-                             skip_changes=False,
-                             flat=False):
+                             skip_changes=False):
         """Download or update the specified dependencies."""
         if depth == 0:
             log.info("Skipped directory: %s", self.location_path)
             return 0
 
-        # The user has chosen flat hierarchy resolution using command line argument --flat
-        if flat:
-            self.flat = flat
-
         sources = self._get_sources(use_locked=False if update else None)
         sources_filter = list(names) if names else [s.name for s in sources]
 
-        if self.flat:
+        if self.resolver == Config.RESOLVER_FLAT_RECURSIVE:
             # gather flat sources and check for rev conflicts
             for source in sources:
                 is_srcname_found = False
@@ -139,14 +144,19 @@ class Config(yorm.ModelMixin):
             common.newline()
             count += 1
 
+            if self.resolver == Config.RESOLVER_FLAT:
+                # don't process nested configs if flat resolver is active
+                continue
+
             config = load_config(search=False)
+            
             if config:
                 common.indent()
                 
-                if self.flat:
+                if self.resolver == Config.RESOLVER_FLAT_RECURSIVE:
                     # Top level preference for flat hierarchy should 
-                    # always propagate flat flag if set once
-                    config.flat = self.flat
+                    # always propagate resolver settings
+                    config.resolver = self.resolver
                     # override default location -> always use root location
                     # to install dependencies all into the same folder
                     config.location_path = self.location_path 
@@ -160,8 +170,7 @@ class Config(yorm.ModelMixin):
                     force=force,
                     fetch=fetch,
                     clean=clean,
-                    skip_changes=skip_changes,
-                    flat=self.flat
+                    skip_changes=skip_changes
                 )
                 common.dedent()
 
@@ -174,7 +183,7 @@ class Config(yorm.ModelMixin):
 
         return count
 
-    def run_scripts(self, *names, depth=None, force=False, flat=False):
+    def run_scripts(self, *names, depth=None, force=False):
         """Run scripts for the specified dependencies."""
         if depth == 0:
             log.info("Skipped directory: %s", self.location_path)
@@ -193,13 +202,23 @@ class Config(yorm.ModelMixin):
                 source.run_scripts(force=force)
                 count += 1
 
+                if self.resolver == Config.RESOLVER_FLAT:
+                    # don't process nested configs if flat resolver is active
+                    continue
+
                 config = load_config(search=False)
                 if config:
                     common.indent()
-                    if self.flat:
-                        # Top level preference for flat hierarchy should always propagate
-                        config.flat = self.flat
-                        config.location_path = self.location_path
+                    
+                    if self.resolver == Config.RESOLVER_FLAT_RECURSIVE:
+                        # Top level preference for flat hierarchy should 
+                        # always propagate resolver settings
+                        config.resolver = self.resolver
+                        # override default location -> always use root location
+                        # to install dependencies all into the same folder
+                        config.location_path = self.location_path 
+                        # forward processed sources list to check for global conflicts
+                        config.processed_sources = self.processed_sources
                     
                     count += config.run_scripts(
                         depth=None if depth is None else max(0, depth - 1),

@@ -43,10 +43,6 @@ def main(args=None, function=None):  # pylint: disable=too-many-statements
                                help=("skip dependencies with "
                                      "uncommitted changes"))
 
-    options.add_argument('-F', '--flat', action='store_true', 
-                         dest='flat',
-                         help="resolve dependencies as a flat hierarchy")
-
     shared = {'formatter_class': common.WideHelpFormatter}
 
     # Main parser
@@ -154,8 +150,7 @@ def _get_command(function, namespace):  # pylint: disable=too-many-statements
                       depth=namespace.depth,
                       force=namespace.force,
                       clean=namespace.clean,
-                      skip_changes=namespace.skip_changes,
-                      flat=namespace.flat)
+                      skip_changes=namespace.skip_changes)
         if namespace.command == 'install':
             kwargs.update(fetch=namespace.fetch)
         if namespace.command == 'update':
