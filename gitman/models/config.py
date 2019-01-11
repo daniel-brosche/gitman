@@ -22,8 +22,8 @@ class Config(yorm.ModelMixin):
     """Specifies all dependencies for a project."""
 
     LOG = "gitman.log"
-    RESOLVER_RECURSIVE = "recursive"
-    RESOLVER_FLAT_RECURSIVE = "flat-recursive"
+    RESOLVER_RECURSIVE = "recursive-nested"
+    RESOLVER_FLAT_RECURSIVE = "recursive-flat"
     RESOLVER_FLAT = "flat"
 
     def __init__(self, root=None,
@@ -155,9 +155,9 @@ class Config(yorm.ModelMixin):
                 
                 if self.resolver == Config.RESOLVER_FLAT_RECURSIVE:
                     # Top level preference for flat hierarchy should 
-                    # always propagate resolver settings
+                    # forward / propagate resolver settings
                     config.resolver = self.resolver
-                    # override default location -> always use root location
+                    # forward / override default location -> always use root location
                     # to install dependencies all into the same folder
                     config.location_path = self.location_path 
                     # forward processed sources list to check for global conflicts
@@ -237,6 +237,9 @@ class Config(yorm.ModelMixin):
         """Lock down the immediate dependency versions."""
         sources = self._get_sources(use_locked=obey_existing).copy()
         sources_filter = list(names) if names else [s.name for s in sources]
+
+        if not os.path.isdir(self.location_path):
+            raise exceptions.InvalidRepository("No dependecies resolved")
 
         shell.cd(self.location_path)
         common.newline()
@@ -346,6 +349,7 @@ class Config(yorm.ModelMixin):
             return []
 
         sources = []
+
         if use_locked is False:
             sources = self.sources
         else:
@@ -357,11 +361,24 @@ class Config(yorm.ModelMixin):
                 sources = self.sources
 
         extras = []
-        for source in self.sources + self.sources_locked:
-            if source not in sources:
-                log.info("Source %r missing from selected section",
-                         source.name)
-                extras.append(source)
+
+        all_sources = self.sources + self.sources_locked
+
+        if self.resolver == Config.RESOLVER_FLAT_RECURSIVE:
+            # here is some extra work to do because all dependencies that are resolved in 
+            # flat hierarchy are needed to resolved in a safe manner to lock them all
+            # in the sources_locked section
+            # self.processed_sources contains the complete list of all resolved sources 
+            # only if an update process has been completed (basically this is the desired list to return)
+            # but this is not the case when directly a lock operation has been executed
+            # therefore we need to do some generic stuff here which is idependently from update process
+            pass
+        else:
+            for source in all_sources:
+                if source not in sources:
+                    log.info("Source %r missing from selected section",
+                            source.name)
+                    extras.append(source)
 
         return sources + extras
 
